@@ -2,7 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
-from app.routes import users
+from app.routes import users, wallets
 from app.database import engine
 from app.models import Base
 
@@ -21,6 +21,7 @@ async def lifespan(app_name: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(users.router)
+app.include_router(wallets.router)
 
 Base.metadata.create_all(bind=engine)
 
