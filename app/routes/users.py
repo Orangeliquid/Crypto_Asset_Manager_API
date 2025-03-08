@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.schemas import UserCreate, UserUpdate, UserResponse, UserUpdateResponse, UserDeleteResponse, UserLoginResponse
-from app.schemas import UserLogin
-from app.crud import crud_update_user, crud_delete_user, crud_get_user_by_username, crud_get_all_users, crud_create_user
-from app.crud import crud_login_user
+from app.schemas.users import UserCreate, UserUpdate, UserResponse, UserUpdateResponse, UserDeleteResponse
+from app.schemas.users import UserLogin, UserLoginResponse
+from app.crud.users import crud_update_user, crud_delete_user, crud_get_user_by_username, crud_get_all_users
+from app.crud.users import crud_login_user, crud_create_user
 from app.database import get_db
 
 router = APIRouter()
