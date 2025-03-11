@@ -8,7 +8,7 @@ from app.schemas.users import UserResponse, UserUpdateResponse, UserDeleteRespon
 from app.utils.security import hash_password, verify_password, create_access_token
 
 
-def crud_create_user(db: Session, user: UserCreate) -> UserResponse:
+def crud_create_user(db: Session, user: UserCreate) -> User:
     db_user = db.query(User).filter(User.username == user.username).first()
     if db_user:
         raise HTTPException(
@@ -35,7 +35,7 @@ def crud_create_user(db: Session, user: UserCreate) -> UserResponse:
     db.commit()
     db.refresh(new_user)
 
-    return UserResponse(id=new_user.id, username=new_user.username, email=new_user.email)
+    return new_user
 
 
 def crud_get_user_by_username(db: Session, username: str):
