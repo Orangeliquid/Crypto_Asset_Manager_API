@@ -20,8 +20,19 @@ class Wallet(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
+
     owner = relationship("User", back_populates="wallets")
     assets = relationship("Asset", back_populates="wallet")
+
+    @property
+    def amount_of_coins(self):
+        # Calculate the total number of coins (sum of all assets' quantities)
+        return sum(asset.quantity for asset in self.assets)
+
+    @property
+    def total_value_usd(self):
+        # Calculate the total value in USD (sum of all assets' values in USD)
+        return sum(asset.value_usd for asset in self.assets)
 
 
 class Asset(Base):
@@ -29,7 +40,7 @@ class Asset(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     wallet_id = Column(Integer, ForeignKey("wallets.id"))
-    asset_symbol = Column(String, index=True)
+    coin_name = Column(String, index=True)
     quantity = Column(Float, default=0.0)
     value_usd = Column(Float, default=0.0)
 
