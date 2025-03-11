@@ -17,7 +17,7 @@ def create_new_user(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/users/{username}", response_model=UserResponse)
-def get_user_by_name(username: str, db: Session = Depends(get_db)):
+def fetch_user_by_name(username: str, db: Session = Depends(get_db)):
     return crud_get_user_by_username(db=db, username=username)
 
 
