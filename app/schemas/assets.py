@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 
 class AssetBase(BaseModel):
-    asset_symbol: str
+    coin_name: str
     quantity: float
     value_usd: float
 
