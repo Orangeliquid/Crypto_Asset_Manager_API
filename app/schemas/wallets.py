@@ -5,21 +5,20 @@ from app.schemas.assets import AssetResponse
 
 
 class WalletBase(BaseModel):
-    asset_symbol: Optional[str] = None
-    quantity: Optional[float] = 0.0
-    value_usd: Optional[float] = 0.0
+    id: int
+    user_id: int
 
     class Config:
         from_attributes = True
 
 
 class WalletCreate(WalletBase):
-    user_id: int
+    pass
 
 
 class WalletResponse(WalletBase):
-    id: int
-    user_id: int
+    amount_of_coins: float
+    total_value_usd: float
     assets: List[AssetResponse]
 
     class Config:
@@ -29,3 +28,7 @@ class WalletResponse(WalletBase):
 class WalletUpdate(BaseModel):
     quantity: Optional[float] = None
     value_usd: Optional[float] = None
+
+
+class WalletDeleteResponse(BaseModel):
+    message: str
