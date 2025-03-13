@@ -47,7 +47,8 @@ class Asset(Base):
     wallet_id = Column(Integer, ForeignKey("wallets.id"))
     coin_name = Column(String, index=True)
     quantity = Column(Float, default=0.0)
-    value_usd = Column(Float, default=0.0)
+    purchase_value_usd = Column(Float, default=0.0)
+    initial_purchase_date = Column(DateTime, default=datetime.utcnow())
 
     wallet = relationship("Wallet", back_populates="assets")
     purchase_transactions = relationship("PurchaseTransaction", back_populates="asset")
@@ -65,7 +66,7 @@ class PurchaseTransaction(Base):
     quantity_purchased = Column(Float)
     purchase_price = Column(Float)
     total_purchase_price = Column(Float)
-    purchase_date = Column(DateTime, default=datetime.utcnow)
+    purchase_date = Column(DateTime, default=datetime.utcnow())
 
     user = relationship("User", back_populates="purchase_transactions")
     wallet = relationship("Wallet", back_populates="purchase_transactions")
@@ -83,7 +84,7 @@ class SaleTransaction(Base):
     quantity_sold = Column(Float)
     sale_price = Column(Float)
     total_sale_price = Column(Float)
-    sale_date = Column(DateTime, default=datetime.utcnow)
+    sale_date = Column(DateTime, default=datetime.utcnow())
 
     user = relationship("User", back_populates="sale_transactions")
     wallet = relationship("Wallet", back_populates="sale_transactions")
