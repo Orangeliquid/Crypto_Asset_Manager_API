@@ -4,7 +4,7 @@ from typing import List
 
 from app.schemas.wallets import WalletBase, WalletResponse, WalletDeleteResponse
 from app.schemas.transactions import PurchaseTransactionResponse, SaleTransactionResponse, PaginatedTransactionsResponse
-from app.schemas.transactions import Transaction
+from app.schemas.assets import PaginatedAssetsResponse
 from app.crud.wallets import crud_create_wallet, crud_purchase_asset, crud_sell_asset
 from app.crud.wallets import crud_get_wallet_by_id, crud_get_transactions_for_wallet, crud_delete_wallet
 from app.crud.wallets import crud_get_all_wallets
@@ -20,9 +20,33 @@ def create_wallet(user_id: int, db: Session = Depends(get_db)):
 
 
 # Route to get wallet details (including assets)
-@router.get("/users/{user_id}/wallet/{wallet_id}/", response_model=WalletResponse)
-def fetch_wallet(user_id: int, wallet_id: int, db: Session = Depends(get_db)):
-    return crud_get_wallet_by_id(db=db, user_id=user_id, wallet_id=wallet_id)
+@router.get("/users/{user_id}/wallet/{wallet_id}/", response_model=PaginatedAssetsResponse)
+def fetch_wallet(
+        user_id: int,
+        wallet_id: int,
+        limit: int = Query(10, ge=1),
+        page: int = Query(1, ge=1),
+        sort_by: str = "coin_name",
+        sort_order: str = "asc",
+        db: Session = Depends(get_db)
+):
+    total_count, total_pages, total_wallet_value, assets = crud_get_wallet_by_id(
+        db=db,
+        user_id=user_id,
+        wallet_id=wallet_id,
+        limit=limit,
+        page=page,
+        sort_by=sort_by,
+        sort_order=sort_order
+    )
+
+    return PaginatedAssetsResponse(
+        total_count=total_count,
+        total_pages=total_pages,
+        current_page=page,
+        total_wallet_value=total_wallet_value,
+        assets=assets
+    )
 
 
 @router.get("/wallets/", response_model=List[WalletResponse])
@@ -43,7 +67,7 @@ def get_transactions_for_wallet(
         page: int = Query(1, ge=1),
         db: Session = Depends(get_db)
 ):
-    transactions, total_transactions, total_pages, current_page = crud_get_transactions_for_wallet(
+    transactions, total_transactions, total_pages = crud_get_transactions_for_wallet(
         db=db,
         user_id=user_id,
         wallet_id=wallet_id,
@@ -51,12 +75,11 @@ def get_transactions_for_wallet(
         page=page
     )
 
-    # Return the response directly using the response model
     return PaginatedTransactionsResponse(
         transactions=transactions,
         total_transactions=total_transactions,
         total_pages=total_pages,
-        current_page=current_page
+        current_page=page
     )
 
 
