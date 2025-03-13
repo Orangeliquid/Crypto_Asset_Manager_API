@@ -1,3 +1,4 @@
+from sqlalchemy import desc, asc
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import HTTPException, status
@@ -20,17 +21,77 @@ def crud_create_wallet(db: Session, user_id: int):
     return wallet
 
 
-def crud_get_wallet_by_id(db: Session, user_id: int, wallet_id: int):
+def crud_get_wallet_by_id(
+        db: Session,
+        user_id: int,
+        wallet_id: int,
+        limit: int,
+        page: int,
+        sort_by: str,
+        sort_order: str
+):
     wallet = db.query(Wallet).filter(Wallet.id == wallet_id, Wallet.user_id == user_id).first()
 
     if not wallet:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wallet not found")
 
+    offset = (page - 1) * limit
+
+    valid_sort_fields = [
+        "coin_name",
+        "quantity",
+        "purchase_value_usd",
+        "current_price_usd",
+        "current_value_usd",
+        "net_gain_loss",
+        "initial_purchase_date",
+    ]
+
+    if sort_by not in valid_sort_fields:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid sort field: {sort_by}. Must be one of {valid_sort_fields}"
+        )
+
     assets = db.query(Asset).filter(Asset.wallet_id == wallet_id).all()
 
-    wallet.assets = assets
+    if not assets:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="No Assets for Wallet... Try buying a coin"
+        )
 
-    return wallet
+    enhanced_assets = []
+    total_wallet_value = 0
+
+    for asset in assets:
+        current_price = get_current_coin_value(asset.coin_name)
+        if current_price is None:
+            continue
+
+        current_value = round(asset.quantity * current_price, 4)
+        net_gain_loss = round(current_value - asset.purchase_value_usd, 4)
+
+        enhanced_assets.append({
+            "id": asset.id,
+            "coin_name": asset.coin_name,
+            "quantity": asset.quantity,
+            "purchase_value_usd": asset.purchase_value_usd,
+            "current_price_usd": current_price,
+            "current_value_usd": current_value,
+            "net_gain_loss": net_gain_loss,
+            "initial_purchase_date": asset.initial_purchase_date
+        })
+
+        total_wallet_value += current_value
+
+    reverse_sort = sort_order == "desc"
+    enhanced_assets.sort(key=lambda x: x[sort_by], reverse=reverse_sort)
+
+    total_count = len(enhanced_assets)
+    total_pages = (total_count + limit - 1) // limit
+    paginated_assets = enhanced_assets[offset:offset + limit]
+
+    return total_count, total_pages, total_wallet_value, paginated_assets
 
 
 def crud_get_all_wallets(db: Session):
@@ -89,7 +150,7 @@ def crud_get_transactions_for_wallet(
     total_transactions = len(all_transactions)
     total_pages = (total_transactions + limit - 1) // limit
 
-    return all_transactions, total_transactions, total_pages, page
+    return all_transactions, total_transactions, total_pages
 
 
 def crud_purchase_asset(
@@ -131,7 +192,7 @@ def crud_purchase_asset(
 
         if existing_asset:
             existing_asset.quantity += quantity
-            existing_asset.value_usd = round(existing_asset.quantity * current_coin_value, 4)
+            existing_asset.purchase_value_usd = round(existing_asset.quantity * current_coin_value, 4)
 
             purchase_transaction = PurchaseTransaction(
                 user_id=user_id,
@@ -155,11 +216,11 @@ def crud_purchase_asset(
             wallet_id=wallet_id,
             coin_name=coin_name,
             quantity=quantity,
-            value_usd=calculated_value_of_coin_quantity
+            purchase_value_usd=calculated_value_of_coin_quantity
         )
 
         db.add(new_asset)
-        db.commit()  # Commit to generate the new asset's ID
+        db.commit()
         db.refresh(new_asset)
 
         purchase_transaction = PurchaseTransaction(
@@ -252,10 +313,8 @@ def crud_delete_wallet(db: Session, wallet_id: int, user_id: int):
     if wallet.user_id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This wallet does not belong to the user")
 
-    # Delete all assets associated with the wallet
     db.query(Asset).filter(Asset.wallet_id == wallet_id).delete()
 
-    # Delete the wallet itself
     db.delete(wallet)
     db.commit()
 
