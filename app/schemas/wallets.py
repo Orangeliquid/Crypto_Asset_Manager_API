@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, List
 
-from app.schemas.assets import AssetResponse
+from app.schemas.assets import AssetBase
 
 
 class WalletBase(BaseModel):
@@ -19,7 +19,7 @@ class WalletCreate(WalletBase):
 class WalletResponse(WalletBase):
     amount_of_coins: float
     total_value_usd: float
-    assets: List[AssetResponse]
+    assets: List[AssetBase]
 
     class Config:
         from_attributes = True
