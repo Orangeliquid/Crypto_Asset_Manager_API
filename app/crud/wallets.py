@@ -1,11 +1,11 @@
-from sqlalchemy import desc, asc
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import HTTPException, status
 from datetime import datetime
+import time
 
 from app.models import Wallet, User, Asset, PurchaseTransaction, SaleTransaction
-from app.CoinCapAPI import valid_coin_names, get_current_coin_value
+from app.CoinCapAPI import valid_coin_names, get_current_coin_data
 
 
 def crud_create_wallet(db: Session, user_id: int):
@@ -45,6 +45,11 @@ def crud_get_wallet_by_id(
         "current_value_usd",
         "net_gain_loss",
         "initial_purchase_date",
+        "coin_cap_rank",
+        "coin_cap_symbol",
+        "market_cap_usd",
+        "volume_usd_24hr",
+        "change_percent_24hr",
     ]
 
     if sort_by not in valid_sort_fields:
@@ -64,11 +69,14 @@ def crud_get_wallet_by_id(
     total_wallet_value = 0
 
     for asset in assets:
-        current_price = get_current_coin_value(asset.coin_name)
-        if current_price is None:
-            continue
+        coin_data = get_current_coin_data(asset.coin_name)
 
-        current_value = round(asset.quantity * current_price, 4)
+        if coin_data is None:
+            print(f"missing {asset.coin_name}")
+            continue
+        print(coin_data)
+
+        current_value = round(asset.quantity * float(coin_data.get("priceUsd", 0)), 4)
         net_gain_loss = round(current_value - asset.purchase_value_usd, 4)
 
         enhanced_assets.append({
@@ -76,13 +84,24 @@ def crud_get_wallet_by_id(
             "coin_name": asset.coin_name,
             "quantity": asset.quantity,
             "purchase_value_usd": asset.purchase_value_usd,
-            "current_price_usd": current_price,
+            "current_price_usd": coin_data.get("priceUsd", 0),
             "current_value_usd": current_value,
             "net_gain_loss": net_gain_loss,
-            "initial_purchase_date": asset.initial_purchase_date
+            "initial_purchase_date": asset.initial_purchase_date,
+            "coin_cap_id": coin_data.get("id", ""),
+            "coin_cap_rank": int(coin_data.get("rank", 0)),
+            "coin_cap_symbol": coin_data.get("symbol", ""),
+            "supply": float(coin_data.get("supply", 0)),
+            "max_supply": coin_data.get("maxSupply", 0.0),
+            "market_cap_usd": float(coin_data.get("marketCapUsd", 0)),
+            "volume_usd_24hr": float(coin_data.get("volumeUsd24Hr", 0)),
+            "change_percent_24hr": float(coin_data.get("changePercent24Hr", 0)),
+            "vwap_24hr": coin_data.get("vwap24Hr", 0.0),
+            "explorer_url": coin_data.get("explorer", "Missing URL from CoinCapAPI")
         })
 
         total_wallet_value += current_value
+        time.sleep(0.5)
 
     reverse_sort = sort_order == "desc"
     enhanced_assets.sort(key=lambda x: x[sort_by], reverse=reverse_sort)
@@ -181,9 +200,13 @@ def crud_purchase_asset(
                 detail=f"Invalid coin name '{coin_name}' - (e.g., 'bitcoin', 'ethereum', 'melania-meme')"
             )
 
-        current_coin_value = get_current_coin_value(coin_name)
-        if current_coin_value is None:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch coin price")
+        current_coin_data = get_current_coin_data(coin_name)
+        if current_coin_data is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch coin data")
+
+        current_coin_value = float(current_coin_data.get("priceUsd", 0))
+        if current_coin_value == 0:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"{coin_name} is valued at 0")
 
         calculated_value_of_coin_quantity = round(quantity * current_coin_value, 4)
 
@@ -191,6 +214,7 @@ def crud_purchase_asset(
             Asset.wallet_id == wallet_id, Asset.coin_name == coin_name).first()
 
         if existing_asset:
+            updated_coin_quantity = existing_asset.quantity + quantity
             existing_asset.quantity += quantity
             existing_asset.purchase_value_usd = round(existing_asset.quantity * current_coin_value, 4)
 
@@ -202,6 +226,7 @@ def crud_purchase_asset(
                 quantity_purchased=quantity,
                 purchase_price=current_coin_value,
                 total_purchase_price=calculated_value_of_coin_quantity,
+                updated_coin_quantity=updated_coin_quantity,
                 purchase_date=datetime.utcnow()
             )
 
@@ -212,37 +237,38 @@ def crud_purchase_asset(
 
             return purchase_transaction
 
-        new_asset = Asset(
-            wallet_id=wallet_id,
-            coin_name=coin_name,
-            quantity=quantity,
-            purchase_value_usd=calculated_value_of_coin_quantity
-        )
+        else:
+            new_asset = Asset(
+                wallet_id=wallet_id,
+                coin_name=coin_name,
+                quantity=quantity,
+                purchase_value_usd=calculated_value_of_coin_quantity
+            )
+            db.add(new_asset)
+            db.flush()
 
-        db.add(new_asset)
-        db.commit()
-        db.refresh(new_asset)
+            purchase_transaction = PurchaseTransaction(
+                user_id=user_id,
+                wallet_id=wallet_id,
+                asset_id=new_asset.id,
+                coin_name=coin_name,
+                quantity_purchased=quantity,
+                purchase_price=current_coin_value,
+                total_purchase_price=calculated_value_of_coin_quantity,
+                updated_coin_quantity=quantity,
+                purchase_date=datetime.utcnow()
+            )
 
-        purchase_transaction = PurchaseTransaction(
-            user_id=user_id,
-            wallet_id=wallet_id,
-            asset_id=new_asset.id,
-            coin_name=coin_name,
-            quantity_purchased=quantity,
-            purchase_price=current_coin_value,
-            total_purchase_price=calculated_value_of_coin_quantity,
-            purchase_date=datetime.utcnow()
-        )
+            db.add(purchase_transaction)
+            db.commit()
+            db.refresh(new_asset)
+            db.refresh(purchase_transaction)
 
-        db.add(purchase_transaction)
-        db.commit()
-        db.refresh(purchase_transaction)
-
-        return purchase_transaction
+            return purchase_transaction
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database error: " + str(e))
 
 
 def crud_sell_asset(
@@ -266,9 +292,9 @@ def crud_sell_asset(
 
         coin_name = coin_name.lower()
 
-        current_coin_value = get_current_coin_value(coin_name)
-        if current_coin_value is None:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch coin price")
+        current_coin_data = get_current_coin_data(coin_name)
+        if current_coin_data is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch coin data")
 
         asset = db.query(Asset).filter(Asset.wallet_id == wallet_id, Asset.coin_name == coin_name).first()
         if not asset:
@@ -276,6 +302,12 @@ def crud_sell_asset(
 
         if asset.quantity < quantity:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Insufficient quantity to sell")
+
+        coins_remaining_after_sale = asset.quantity - quantity
+
+        current_coin_value = float(current_coin_data.get("priceUsd", 0))
+        if current_coin_value == 0:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"{coin_name} is valued at 0")
 
         sale_price_usd = round(quantity * current_coin_value, 4)
 
@@ -287,6 +319,7 @@ def crud_sell_asset(
             quantity_sold=quantity,
             sale_price=current_coin_value,
             total_sale_price=sale_price_usd,
+            remaining_coin_quantity=coins_remaining_after_sale,
             sale_date=datetime.utcnow()
         )
 
