@@ -44,7 +44,7 @@ def fetch_wallet(
         total_count=total_count,
         total_pages=total_pages,
         current_page=page,
-        total_wallet_value=total_wallet_value,
+        total_wallet_value_usd=total_wallet_value,
         assets=assets
     )
 
