@@ -37,7 +37,7 @@ class Wallet(Base):
     @property
     def total_value_usd(self):
         # Calculate the total value in USD (sum of all assets' values in USD)
-        return sum(asset.value_usd for asset in self.assets)
+        return sum(asset.purchase_value_usd for asset in self.assets)
 
 
 class Asset(Base):
@@ -66,6 +66,7 @@ class PurchaseTransaction(Base):
     quantity_purchased = Column(Float)
     purchase_price = Column(Float)
     total_purchase_price = Column(Float)
+    updated_coin_quantity = Column(Float)
     purchase_date = Column(DateTime, default=datetime.utcnow())
 
     user = relationship("User", back_populates="purchase_transactions")
@@ -84,6 +85,7 @@ class SaleTransaction(Base):
     quantity_sold = Column(Float)
     sale_price = Column(Float)
     total_sale_price = Column(Float)
+    remaining_coin_quantity = Column(Float)
     sale_date = Column(DateTime, default=datetime.utcnow())
 
     user = relationship("User", back_populates="sale_transactions")
