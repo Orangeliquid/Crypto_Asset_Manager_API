@@ -18,6 +18,7 @@ class PurchaseTransactionBase(BaseModel):
 
 class PurchaseTransactionResponse(PurchaseTransactionBase):
     total_purchase_price: float
+    updated_coin_quantity: float
     purchase_date: datetime
     id: int
 
@@ -39,6 +40,7 @@ class SaleTransactionBase(BaseModel):
 
 class SaleTransactionResponse(SaleTransactionBase):
     total_sale_price: float
+    remaining_coin_quantity: float
     id: int
     sale_date: datetime
 
