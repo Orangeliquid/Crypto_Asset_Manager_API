@@ -14,9 +14,9 @@ async def lifespan(app_name: FastAPI):
     after I would terminate the server and this led to no feedback coming from the terminal when re-running
     uvicorn. Thus, I've moved to this approach to control start and stop of the server, documented in FastAPI docs.
     """
-    print("App is starting...")
+    print("App has started!")
     yield
-    print("App is shutting down...")
+    print("App has shut down!")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -24,11 +24,6 @@ app.include_router(users.router)
 app.include_router(wallets.router)
 
 Base.metadata.create_all(bind=engine)
-
-
-@app.get("/")
-def hello():
-    return {"message": "Hello, world!"}
 
 
 if __name__ == "__main__":
