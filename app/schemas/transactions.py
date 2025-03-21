@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from enum import Enum
 
@@ -71,6 +71,17 @@ class PaginatedTransactionsResponse(BaseModel):
     total_transactions: int
     total_pages: int
     current_page: int
+
+    class Config:
+        from_attributes = True
+
+
+class WalletValuationResponse(BaseModel):
+    wallet_id: int
+    start_value_usd: Optional[float] = None
+    end_value_usd: float
+    net_gain_loss_usd: float
+    current_value_usd: float
 
     class Config:
         from_attributes = True
