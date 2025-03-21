@@ -1,10 +1,11 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import desc, asc, func, cast, Date
 from fastapi import HTTPException, status
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 
-from app.models import Wallet, User, Asset, PurchaseTransaction, SaleTransaction
+from app.models import Wallet, User, Asset, PurchaseTransaction, SaleTransaction, WalletActivityData
 from app.CoinCapAPI import valid_coin_names, get_current_coin_data
 
 
@@ -69,6 +70,9 @@ def crud_get_wallet_by_id(
     total_wallet_value = 0
 
     for asset in assets:
+
+        print(asset.id)
+
         coin_data = get_current_coin_data(asset.coin_name)
 
         if coin_data is None:
@@ -113,11 +117,49 @@ def crud_get_wallet_by_id(
     return total_count, total_pages, total_wallet_value, paginated_assets
 
 
+def create_wallet_activity_snapshot(db: Session, user_id: int, wallet_id: int):
+    total_count, total_pages, total_wallet_value, enhanced_assets = crud_get_wallet_by_id(
+        db=db,
+        user_id=user_id,
+        wallet_id=wallet_id,
+        limit=1000,
+        page=1,
+        sort_by="coin_name",
+        sort_order="asc"
+    )
+
+    if not enhanced_assets:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No assets found for this wallet")
+
+    holdings = {}
+    for asset in enhanced_assets:
+        holdings[asset["coin_name"]] = {
+            "quantity": asset["quantity"],
+            "purchase_value_usd": asset["purchase_value_usd"],
+            "value_on_date_usd": asset["current_value_usd"]
+        }
+
+    snapshot = WalletActivityData(
+        wallet_id=wallet_id,
+        date=datetime.utcnow(),
+        holdings=holdings,
+        total_value_usd=total_wallet_value
+    )
+
+    db.add(snapshot)
+    db.commit()
+
+
 def crud_get_all_wallets(db: Session):
-    return db.query(Wallet).all()
+    wallets = db.query(Wallet).all()
+
+    if not wallets:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No wallets found")
+
+    return wallets
 
 
-def crud_get_transactions_for_wallet(
+def crud_get_all_transactions_for_wallet(
     db: Session,
     user_id: int,
     wallet_id: int,
@@ -172,6 +214,122 @@ def crud_get_transactions_for_wallet(
     return all_transactions, total_transactions, total_pages
 
 
+# TODO: Retrieve the first transaction date for each asset in the wallet.
+# TODO: Fetch and parse historical prices from the first transaction date to the current date.
+# TODO: Identify the closest available price to the requested historical date for each asset.
+# TODO: Calculate the valuation of each asset on the historical date (quantity × price on that date).
+# TODO: Determine the potential gain/loss by comparing historical date valuation with original purchase price.
+# TODO: Compute the total wallet valuation at the historical date.
+# TODO: Summarize net gain/loss for the entire wallet if sold on the historical date.
+
+def crud_get_wallet_valuation(db: Session, user_id: int, wallet_id: int, historical_date: str):
+
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        wallet = db.query(Wallet).filter(Wallet.id == wallet_id).first()
+        if not wallet:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wallet not found")
+
+        if wallet.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This wallet does not belong to the user"
+            )
+
+        try:
+            historical_date_dt = datetime.strptime(historical_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid date format. Expected format: YYYY-MM-DD"
+            )
+
+            # Step 1: Try to find the latest snapshot from the exact date
+        activity = (
+            db.query(WalletActivityData)
+            .filter(
+                WalletActivityData.wallet_id == wallet_id,
+                func.date(WalletActivityData.date) == historical_date_dt  # Ensure exact date match
+            )
+            .order_by(desc(WalletActivityData.date))  # Get the most recent snapshot from that day
+            .first()
+        )
+
+        if activity:
+            print("found exact date requested")
+
+        # Step 2: If no exact match, find the closest past snapshot
+        if not activity:
+            print("No exact match, checking closest past snapshot")
+            activity = (
+                db.query(WalletActivityData)
+                .filter(
+                    WalletActivityData.wallet_id == wallet_id,
+                    WalletActivityData.date < historical_date_dt  # Any date before the requested date
+                )
+                .order_by(desc(WalletActivityData.date))  # Get the most recent past snapshot
+                .first()
+            )
+
+            if activity:
+                print("Found past snapshot")
+
+        # Step 3: If no past snapshot exists, get the closest future snapshot
+        if not activity:
+            print("No exact match, checking closest future snapshot")
+
+            # Step 1: Find the nearest future date with activity
+            nearest_future_date = (
+                db.query(func.date(WalletActivityData.date))  # Extract only the date part
+                .filter(
+                    WalletActivityData.wallet_id == wallet_id,
+                    WalletActivityData.date > historical_date_dt  # Any date after the requested date
+                )
+                .order_by(asc(WalletActivityData.date))  # Get the nearest future date
+                .limit(1)
+                .scalar()  # Fetch the single value (earliest future date)
+            )
+
+            # Step 2: If we found nearest future date, get the last snapshot of that date
+            if nearest_future_date:
+                nearest_future_date = str(nearest_future_date)
+                activity = (
+                    db.query(WalletActivityData)
+                    .filter(
+                        WalletActivityData.wallet_id == wallet_id,
+                        func.date(WalletActivityData.date) == nearest_future_date
+                    )
+                    .order_by(desc(WalletActivityData.date))
+                    .first()
+                )
+                if activity:
+                    print("Found future snapshot")
+
+        # If no activity data found at all, raise an error
+        if not activity:
+            print("No nearest match - raising error")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No wallet activity data found for the given date or nearby dates"
+            )
+
+        return {
+            "wallet_id": activity.wallet_id,
+            "date": activity.date.strftime("%Y-%m-%d %H:%M:%S"),  # Include time for clarity
+            "holdings": activity.holdings,
+            "total_value_usd": activity.total_value_usd,
+        }
+
+    except SQLAlchemyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error: " + str(e)
+        )
+
+
 def crud_purchase_asset(
         db: Session,
         user_id: int,
@@ -216,7 +374,7 @@ def crud_purchase_asset(
         if existing_asset:
             updated_coin_quantity = existing_asset.quantity + quantity
             existing_asset.quantity += quantity
-            existing_asset.purchase_value_usd = round(existing_asset.quantity * current_coin_value, 4)
+            existing_asset.purchase_value_usd += calculated_value_of_coin_quantity
 
             purchase_transaction = PurchaseTransaction(
                 user_id=user_id,
@@ -234,6 +392,9 @@ def crud_purchase_asset(
             db.commit()
             db.refresh(existing_asset)
             db.refresh(purchase_transaction)
+
+            create_wallet_activity_snapshot(db=db, user_id=user_id, wallet_id=wallet_id)
+            print("Snapshot created for purchase")
 
             return purchase_transaction
 
@@ -263,6 +424,9 @@ def crud_purchase_asset(
             db.commit()
             db.refresh(new_asset)
             db.refresh(purchase_transaction)
+
+            create_wallet_activity_snapshot(db=db, user_id=user_id, wallet_id=wallet_id)
+            print("Snapshot created for purchase")
 
             return purchase_transaction
 
@@ -330,6 +494,9 @@ def crud_sell_asset(
         db.add(sale_transaction)
         db.commit()
         db.refresh(sale_transaction)
+
+        create_wallet_activity_snapshot(db=db, user_id=user_id, wallet_id=wallet_id)
+        print("Snapshot created for sale")
 
         return sale_transaction
 
