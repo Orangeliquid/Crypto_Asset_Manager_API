@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -6,8 +6,8 @@ from app.schemas.wallets import WalletBase, WalletResponse, WalletDeleteResponse
 from app.schemas.transactions import PurchaseTransactionResponse, SaleTransactionResponse, PaginatedTransactionsResponse
 from app.schemas.assets import PaginatedAssetsResponse
 from app.crud.wallets import crud_create_wallet, crud_purchase_asset, crud_sell_asset
-from app.crud.wallets import crud_get_wallet_by_id, crud_get_transactions_for_wallet, crud_delete_wallet
-from app.crud.wallets import crud_get_all_wallets
+from app.crud.wallets import crud_get_wallet_by_id, crud_get_all_transactions_for_wallet, crud_delete_wallet
+from app.crud.wallets import crud_get_all_wallets, crud_get_wallet_valuation
 from app.database import get_db
 
 router = APIRouter()
@@ -51,23 +51,18 @@ def fetch_wallet(
 
 @router.get("/wallets/", response_model=List[WalletResponse])
 def fetch_all_wallets(db: Session = Depends(get_db)):
-    wallets = crud_get_all_wallets(db)
-
-    if not wallets:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No wallets found")
-
-    return wallets
+    return crud_get_all_wallets(db)
 
 
-@router.get("/users/{user_id}/wallet/{wallet_id}/transactions", response_model=PaginatedTransactionsResponse)
-def get_transactions_for_wallet(
+@router.get("/users/{user_id}/wallet/{wallet_id}/all-transactions", response_model=PaginatedTransactionsResponse)
+def get_all_transactions_for_wallet(
         user_id: int,
         wallet_id: int,
         limit: int = Query(10, ge=1),
         page: int = Query(1, ge=1),
         db: Session = Depends(get_db)
 ):
-    transactions, total_transactions, total_pages = crud_get_transactions_for_wallet(
+    transactions, total_transactions, total_pages = crud_get_all_transactions_for_wallet(
         db=db,
         user_id=user_id,
         wallet_id=wallet_id,
@@ -81,6 +76,17 @@ def get_transactions_for_wallet(
         total_pages=total_pages,
         current_page=page
     )
+
+
+@router.get("/users/{user_id}/wallet/{wallet_id}/valuation-by-date")
+def get_wallet_valuation(
+    user_id: int,
+    wallet_id: int,
+    historical_date: str,
+    db: Session = Depends(get_db)
+):
+
+    return crud_get_wallet_valuation(db, user_id, wallet_id, historical_date)
 
 
 @router.put("/users/{user_id}/wallet/{wallet_id}/purchase_asset", response_model=PurchaseTransactionResponse)
