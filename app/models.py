@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Float, DateTime
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import JSON
 from datetime import datetime
 
 from app.database import Base
@@ -28,6 +29,7 @@ class Wallet(Base):
     assets = relationship("Asset", back_populates="wallet")
     purchase_transactions = relationship("PurchaseTransaction", back_populates="wallet")
     sale_transactions = relationship("SaleTransaction", back_populates="wallet")
+    activity_data = relationship("WalletActivityData", back_populates="wallet", cascade="all, delete-orphan")
 
     @property
     def amount_of_coins(self):
@@ -38,6 +40,18 @@ class Wallet(Base):
     def total_value_usd(self):
         # Calculate the total value in USD (sum of all assets' values in USD)
         return sum(asset.purchase_value_usd for asset in self.assets)
+
+
+class WalletActivityData(Base):
+    __tablename__ = "wallet_activity_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    wallet_id = Column(Integer, ForeignKey("wallets.id"))
+    date = Column(DateTime, default=datetime.utcnow(), nullable=False)
+    holdings = Column(JSON, nullable=False)
+    total_value_usd = Column(Float, nullable=False)
+
+    wallet = relationship("Wallet", back_populates="activity_data")
 
 
 class Asset(Base):
