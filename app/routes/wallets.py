@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.schemas.wallets import WalletBase, WalletResponse, WalletDeleteResponse
+from app.schemas.wallets import WalletBase, WalletResponse, WalletDeleteResponse, WalletValuationResponse
 from app.schemas.transactions import PurchaseTransactionResponse, SaleTransactionResponse, PaginatedTransactionsResponse
 from app.schemas.assets import PaginatedAssetsResponse
 from app.crud.wallets import crud_create_wallet, crud_purchase_asset, crud_sell_asset
@@ -78,11 +78,11 @@ def get_all_transactions_for_wallet(
     )
 
 
-@router.get("/users/{user_id}/wallet/{wallet_id}/valuation-by-date")
+@router.get("/users/{user_id}/wallet/{wallet_id}/valuation-by-date", response_model=WalletValuationResponse)
 def get_wallet_valuation(
     user_id: int,
     wallet_id: int,
-    historical_date: str,
+    historical_date: str = "2025-03-25",
     db: Session = Depends(get_db)
 ):
 
