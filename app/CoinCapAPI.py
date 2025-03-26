@@ -84,6 +84,7 @@ def fetch_dated_coin_price(coin_name: str, start_timestamp: int, end_timestamp: 
     url = f"https://api.coincap.io/v2/assets/{coin_name}/history?interval=d1&start={start_timestamp}&end={end_timestamp}"
 
     try:
+        time.sleep(0.50)
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         print(f"Called GET CoinCapAPI for {coin_name}")
@@ -111,20 +112,3 @@ def fetch_dated_coin_price(coin_name: str, start_timestamp: int, end_timestamp: 
     except requests.RequestException as e:
         print(f"Error fetching historical data for {coin_name}: {e}")
         return None
-
-
-if __name__ == '__main__':
-    # print("Valid Coins:", valid_coin_names())
-    # print("Cardano Price:", get_current_coin_data("cardano"))
-    # print("XRP Price:", get_current_coin_data("xrp"))
-    # print("Ethereum Price:", get_current_coin_data("ethereum"))
-    # Test 1: Valid historical data for a coin
-    print("\nTest 1: Valid historical data for a coin")
-    coin_name = "ethereum"
-    start_timestamp = int(time.mktime(time.strptime("2023-01-01", "%Y-%m-%d")))
-    end_timestamp = int(time.mktime(time.strptime("2023-01-15", "%Y-%m-%d")))
-    data = fetch_dated_coin_price(coin_name, start_timestamp, end_timestamp)
-    if data:
-        print(f"Historical data for {coin_name}: {data}")
-    else:
-        print(f"No data found for {coin_name} between {start_timestamp} and {end_timestamp}")
