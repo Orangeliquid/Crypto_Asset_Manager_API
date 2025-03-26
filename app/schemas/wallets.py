@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from app.schemas.assets import AssetBase
 
@@ -28,6 +28,16 @@ class WalletResponse(WalletBase):
 class WalletUpdate(BaseModel):
     quantity: Optional[float] = None
     value_usd: Optional[float] = None
+
+
+class WalletValuationResponse(BaseModel):
+    wallet_id: int
+    snap_shot_date: str
+    snap_shot_date_relative_to_historic_date: str
+    holdings: Dict
+    total_value_usd_on_snapshot_date: float
+    date_requested_total_value: float
+    net_gain_loss: float
 
 
 class WalletDeleteResponse(BaseModel):
