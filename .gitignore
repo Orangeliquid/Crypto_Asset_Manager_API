@@ -8,3 +8,4 @@ venv/
 *.log
 *.db
 *.txt
+.coverage
