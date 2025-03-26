@@ -8,4 +8,8 @@ venv/
 *.log
 *.db
 *.txt
+
+# Ignore coverage files
 .coverage
+htmlcov/
+*.hypothesis/
