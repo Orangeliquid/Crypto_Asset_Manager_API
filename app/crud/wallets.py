@@ -1,12 +1,12 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import desc, asc, func, cast, Date
+from sqlalchemy import desc, asc, func
 from fastapi import HTTPException, status
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
 
 from app.models import Wallet, User, Asset, PurchaseTransaction, SaleTransaction, WalletActivityData
-from app.CoinCapAPI import valid_coin_names, get_current_coin_data
+from app.CoinCapAPI import valid_coin_names, get_current_coin_data, fetch_dated_coin_price
 
 
 def crud_create_wallet(db: Session, user_id: int):
@@ -87,8 +87,8 @@ def crud_get_wallet_by_id(
             "id": asset.id,
             "coin_name": asset.coin_name,
             "quantity": asset.quantity,
-            "purchase_value_usd": asset.purchase_value_usd,
-            "current_price_usd": coin_data.get("priceUsd", 0),
+            "purchase_value_usd": asset.purchase_value_usd,  # Summation of purchase price of asset
+            "current_price_usd": coin_data.get("priceUsd", 0),  # Price for one coin on current date
             "current_value_usd": current_value,
             "net_gain_loss": net_gain_loss,
             "initial_purchase_date": asset.initial_purchase_date,
@@ -135,8 +135,8 @@ def create_wallet_activity_snapshot(db: Session, user_id: int, wallet_id: int):
     for asset in enhanced_assets:
         holdings[asset["coin_name"]] = {
             "quantity": asset["quantity"],
-            "purchase_value_usd": asset["purchase_value_usd"],
-            "value_on_date_usd": asset["current_value_usd"]
+            "purchase_value_usd": asset["purchase_value_usd"],  # Summation of asset total purchase cost
+            "value_on_date_usd": asset["current_value_usd"]  # Valuation of asset quantity on date of snapshot
         }
 
     snapshot = WalletActivityData(
@@ -214,14 +214,6 @@ def crud_get_all_transactions_for_wallet(
     return all_transactions, total_transactions, total_pages
 
 
-# TODO: Retrieve the first transaction date for each asset in the wallet.
-# TODO: Fetch and parse historical prices from the first transaction date to the current date.
-# TODO: Identify the closest available price to the requested historical date for each asset.
-# TODO: Calculate the valuation of each asset on the historical date (quantity × price on that date).
-# TODO: Determine the potential gain/loss by comparing historical date valuation with original purchase price.
-# TODO: Compute the total wallet valuation at the historical date.
-# TODO: Summarize net gain/loss for the entire wallet if sold on the historical date.
-
 def crud_get_wallet_valuation(db: Session, user_id: int, wallet_id: int, historical_date: str):
 
     try:
@@ -247,7 +239,10 @@ def crud_get_wallet_valuation(db: Session, user_id: int, wallet_id: int, histori
                 detail="Invalid date format. Expected format: YYYY-MM-DD"
             )
 
-            # Step 1: Try to find the latest snapshot from the exact date
+        snap_shot_date_relative_to_historic_date = ""
+        date_requested_total_value = 0
+
+        # Step 1: Try to find the latest snapshot from the exact date
         activity = (
             db.query(WalletActivityData)
             .filter(
@@ -260,6 +255,8 @@ def crud_get_wallet_valuation(db: Session, user_id: int, wallet_id: int, histori
 
         if activity:
             print("found exact date requested")
+            snap_shot_date_relative_to_historic_date = "current"
+            date_requested_total_value = activity.total_value_usd
 
         # Step 2: If no exact match, find the closest past snapshot
         if not activity:
@@ -276,6 +273,27 @@ def crud_get_wallet_valuation(db: Session, user_id: int, wallet_id: int, histori
 
             if activity:
                 print("Found past snapshot")
+                snap_shot_date_relative_to_historic_date = "past"
+
+                """
+                If snap shot is from the past then the user is requesting the value of assets from a future date.
+                Now we query CoinCapAPI for the price of each asset on the date requested and add this value to the data
+                for each of the coins within holding. These added up are used for date_requested_total_value
+                """
+
+                date_in_seconds = int(time.mktime(time.strptime(historical_date, "%Y-%m-%d")))
+
+                for coin in activity.holdings:
+                    data = fetch_dated_coin_price(
+                        coin_name=coin,
+                        start_timestamp=date_in_seconds,
+                        end_timestamp=date_in_seconds
+                    )
+                    data_price_per_coin = data[-1]["priceUsd"]
+                    asset_quantity = activity.holdings[coin]["quantity"]
+                    value_on_date_requested = float(data_price_per_coin) * asset_quantity
+                    date_requested_total_value += value_on_date_requested
+                    activity.holdings[coin]["value_on_date_requested"] = date_requested_total_value
 
         # Step 3: If no past snapshot exists, get the closest future snapshot
         if not activity:
@@ -283,7 +301,7 @@ def crud_get_wallet_valuation(db: Session, user_id: int, wallet_id: int, histori
 
             # Step 1: Find the nearest future date with activity
             nearest_future_date = (
-                db.query(func.date(WalletActivityData.date))  # Extract only the date part
+                db.query(func.date(WalletActivityData.date))  # Extract only the date
                 .filter(
                     WalletActivityData.wallet_id == wallet_id,
                     WalletActivityData.date > historical_date_dt  # Any date after the requested date
@@ -307,6 +325,8 @@ def crud_get_wallet_valuation(db: Session, user_id: int, wallet_id: int, histori
                 )
                 if activity:
                     print("Found future snapshot")
+                    snap_shot_date_relative_to_historic_date = "future"
+                    date_requested_total_value = activity.total_value_usd
 
         # If no activity data found at all, raise an error
         if not activity:
@@ -318,9 +338,12 @@ def crud_get_wallet_valuation(db: Session, user_id: int, wallet_id: int, histori
 
         return {
             "wallet_id": activity.wallet_id,
-            "date": activity.date.strftime("%Y-%m-%d %H:%M:%S"),  # Include time for clarity
+            "snap_shot_date": activity.date.strftime("%Y-%m-%d %H:%M:%S"),
+            "snap_shot_date_relative_to_historic_date": snap_shot_date_relative_to_historic_date,
             "holdings": activity.holdings,
-            "total_value_usd": activity.total_value_usd,
+            "total_value_usd_on_snapshot_date": activity.total_value_usd,
+            "date_requested_total_value": date_requested_total_value,
+            "net_gain_loss": date_requested_total_value - activity.total_value_usd
         }
 
     except SQLAlchemyError as e:
