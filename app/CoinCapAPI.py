@@ -1,5 +1,6 @@
 import requests
 import time
+from fastapi import HTTPException
 
 # Cache for assets and coin names (2-minute expiration)
 _cache = {
@@ -27,6 +28,7 @@ def fetch_all_assets():
     url = "https://api.coincap.io/v2/assets"
 
     try:
+        time.sleep(0.5)
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         print("Called GET CoinCapAPI")
@@ -44,8 +46,7 @@ def fetch_all_assets():
         return _cache
 
     except requests.RequestException as e:
-        print(f"Error fetching all assets: {e}")
-        return _cache
+        raise HTTPException(status_code=500, detail=f"Error fetching all assets: {e}")
 
 
 def valid_coin_names():
@@ -55,14 +56,8 @@ def valid_coin_names():
 
 def get_current_coin_data(coin_name: str):
     """Fetches the current value of a specific coin, using cache if available."""
-
     cache = fetch_all_assets()
-
-    if coin_name in cache["coins"]:
-        return cache["assets"].get(coin_name)
-
-    print(f"Coin '{coin_name}' not found.")
-    return None
+    return cache["assets"].get(coin_name, None)
 
 
 def fetch_dated_coin_price(coin_name: str, start_timestamp: int, end_timestamp: int):
