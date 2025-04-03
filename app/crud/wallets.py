@@ -128,9 +128,6 @@ def create_wallet_activity_snapshot(db: Session, user_id: int, wallet_id: int):
         sort_order="asc"
     )
 
-    if not enhanced_assets:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No assets found for this wallet")
-
     holdings = {}
     for asset in enhanced_assets:
         holdings[asset["coin_name"]] = {
@@ -479,10 +476,6 @@ def crud_sell_asset(
 
         coin_name = coin_name.lower()
 
-        current_coin_data = get_current_coin_data(coin_name)
-        if current_coin_data is None:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch coin data")
-
         asset = db.query(Asset).filter(Asset.wallet_id == wallet_id, Asset.coin_name == coin_name).first()
         if not asset:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"{coin_name} asset not found in wallet")
@@ -490,13 +483,16 @@ def crud_sell_asset(
         if asset.quantity < quantity:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Insufficient quantity to sell")
 
-        coins_remaining_after_sale = asset.quantity - quantity
+        current_coin_data = get_current_coin_data(coin_name)
+        if current_coin_data is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch coin data")
 
         current_coin_value = float(current_coin_data.get("priceUsd", 0))
         if current_coin_value == 0:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"{coin_name} is valued at 0")
 
         sale_price_usd = round(quantity * current_coin_value, 4)
+        coins_remaining_after_sale = asset.quantity - quantity
 
         sale_transaction = SaleTransaction(
             user_id=user_id,
@@ -510,22 +506,26 @@ def crud_sell_asset(
             sale_date=datetime.utcnow()
         )
 
-        asset.quantity -= quantity
-        if asset.quantity == 0:
-            db.delete(asset)
-
         db.add(sale_transaction)
+
+        asset.quantity = coins_remaining_after_sale
+
         db.commit()
         db.refresh(sale_transaction)
 
         create_wallet_activity_snapshot(db=db, user_id=user_id, wallet_id=wallet_id)
         print("Snapshot created for sale")
 
+        if asset.quantity == 0:
+            db.delete(asset)
+            db.commit()
+
         return sale_transaction
 
     except SQLAlchemyError as e:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        print(f"Database error during sale: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database error: " + str(e))
 
 
 def crud_delete_wallet(db: Session, wallet_id: int, user_id: int):
