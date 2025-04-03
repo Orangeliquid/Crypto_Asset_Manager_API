@@ -1,15 +1,29 @@
+# Ignore Python bytecode files
 __pycache__/
 *.pyc
 *.pyo
+
+# Ignore virtual environment
 venv/
 .env
+
+# Ignore IDE/editor config files
 .idea/
+
+# Ignore database files
 *.sqlite3
-*.log
 *.db
+
+# Ignore log files
+*.log
+
+# Ignore any .txt files (optional, if you want to exclude all)
 *.txt
 
 # Ignore coverage files
 .coverage
 htmlcov/
 *.hypothesis/
+
+# Allow requirements.txt (do not ignore)
+!requirements.txt
