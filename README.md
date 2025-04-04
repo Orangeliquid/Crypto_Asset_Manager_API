@@ -42,7 +42,7 @@ To run the Crypto Asset Manager API locally, follow these steps:
    Adjust these values as needed for your security and expiration preferences.
    
 
-## Usage - API Overview
+## Usage API Overview
 
 1. **Ensure all packages from `requirements.txt` are installed**  
    ```bash
