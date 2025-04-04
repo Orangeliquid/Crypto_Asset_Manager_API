@@ -25,5 +25,6 @@ venv/
 htmlcov/
 *.hypothesis/
 
-# Allow requirements.txt (do not ignore)
+# Allow requirements.txt and LICENSE.txt (do not ignore)
 !requirements.txt
+!LICENSE.txt
