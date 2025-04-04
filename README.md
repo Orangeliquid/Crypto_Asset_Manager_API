@@ -73,19 +73,19 @@ To run the Crypto Asset Manager API locally, follow these steps:
      
 9. Additional endpoints for user and wallet management:
 
-    ### Users
+    ### Users Endpoints
    - GET /users/ - Fetch All Users
    - GET /users/{username} - Fetch User By Name
    - PUT /users/{user_id} - Modify User
    - DELETE /users/{user_id} - Remove User
    - POST /login Login - User Login (returns JWT)
 
-   ### Wallets
+   ### Wallets Endpoints
    - GET /users/{user_id}/wallet/{wallet_id}/ - Fetch Wallet
    - GET /wallets/ Fetch All Wallets – Fetch All Wallets
    - DELETE /users/{user_id}/wallet/{wallet_id}/ - Delete Wallet
 
-   ### Transactions & Valuations
+   ### Transactions & Valuations Endpoints
    - GET /users/{user_id}/wallet/{wallet_id}/all-transactions - Get All Transactions For Wallet
    - GET /users/{user_id}/wallet/{wallet_id}/valuation-by-date - Get Wallet Valuation
 
