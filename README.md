@@ -33,11 +33,13 @@ To run the Crypto Asset Manager API locally, follow these steps:
    ```
    These variables are used for authentication and token generation:
 
-   - SECRET_KEY: A secret string used to sign and verify JWT tokens. Change this to a secure, random value.
+   - SECRET_KEY: A secret string used to sign and verify JWT tokens. Change this to a secure, random value. Example: SECRET_KEY=aGsdg12A1sd32f2SD1vS0dseghhas2
 
    - ALGORITHM: The hashing algorithm used for encoding the JWT (default is HS256).
+     Example: ALGORITHM=HS256
 
    - ACCESS_TOKEN_EXPIRE_MINUTES: Defines how long an access token remains valid (default is 30 minutes).
+     Example: ACCESS_TOKEN_EXPIRE_MINUTES=30
 
    Adjust these values as needed for your security and expiration preferences.
    
