@@ -2,6 +2,9 @@
 
 The Crypto Asset Manager API is a RESTful API built with FastAPI that allows users to manage their cryptocurrency holdings. It provides functionality for creating users, wallets associated with users, adding assets, tracking transactions, and calculating portfolio value and performance. The API uses SQLAlchemy for database persistence and Pydantic models for request validation and response serialization. Asset prices are fetched in real-time using the CoinCap API.
 
+CoinCap API documentation can be found here:
+https://docs.coincap.io/
+
 ## Table of Contents
 
 - [Installation](#installation)
