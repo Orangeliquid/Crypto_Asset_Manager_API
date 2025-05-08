@@ -17,11 +17,11 @@ This means that the integration of CoinCap API 2.0 in this project no longer wor
 ## Table of Contents
 
 - [Installation](#installation)
-- [Usage](#Usage-API-Overview)
-- [API-Endpoints](#API-Endpoints)
-  - [Users](#Users)
-  - [Wallets](#Wallets)
-  - [Transactions-and-Valuations](#Transactions-and-Valuations)
+- [Usage](#usage-api-overview)
+- [API-Endpoints](#api-endpoints)
+  - [Users](#users)
+  - [Wallets](#wallets)
+  - [Transactions-and-Valuations](#transactions-and-valuations)
 - [License](#license)
 
 ## Installation
